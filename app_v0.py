@@ -36,7 +36,7 @@ def create_db(conn):
             TV FLOAT(32),
             radio FLOAT(32),
             newspaper FLOAT(32),
-            sales FLOAT
+            sales FLOAT(32)
         )
     """
     cursor.execute(create_table)
@@ -47,9 +47,18 @@ def add_data(conn):
     data = pd.read_csv('data/Advertising.csv')
     data = clean_data(data)
 
+    cursor = conn.cursor()
 
-    if not os.path.exists("advertising_new.db"):
-        data.to_sql(name="advertising", con=conn, if_exists="append", index=False)
+    query =\
+    """
+        SELECT * FROM advertising
+    """
+    comp = cursor.execute(query)
+    results = comp.fetchall()
+
+    print(results)
+    if not results:
+        data.to_sql(name="advertising", con=conn, if_exists="replace", index=False)
 
 
 def ingest_new_data(conn, data):
@@ -59,15 +68,16 @@ def ingest_new_data(conn, data):
     tv = data["TV"]
     radio = data["radio"]
     newspaper = data["newspaper"]
+    sales = data["sales"]
 
     query_2 = \
     f"""
-        INSERT INTO advertising (TV, radio, newspaper) VALUES ({tv},{radio},{newspaper})
+        INSERT INTO advertising (TV, radio, newspaper, sales) VALUES ({tv},{radio},{newspaper},{sales})
 
     """
     cursor.execute(query_2)
 
-    query_comp = "SELECT * FROM advertising ORDER BY id DESC LIMIT 1 "
+    query_comp = "SELECT * FROM advertising ORDER BY TV DESC LIMIT 1 "
 
     data = cursor.execute(query_comp)
     results = data.fetchall()
@@ -91,13 +101,22 @@ def welcome():
 @app.route('/v2/predict', methods=['GET'])
 def predict():
     model = pickle.load(open('data/advertising_model','rb'))
+    conn = connect_db()
+    cursor = conn.cursor()
 
-    data = pd.read_csv('data/Advertising.csv')
-    data = clean_data(data)
-    X_test = data[["TV", "radio", "newspaper"]]
+    query =\
+    """
+        SELECT TV, radio, newspaper FROM advertising
+    """
+    data = cursor.execute(query)
+    results = data.fetchall()
+
+    columns = [descripcion[0] for descripcion in cursor.description]
+    X_test = pd.DataFrame(results, columns=columns)
 
     prediction = model.predict(X_test)
 
+    close_db(conn)
     return "The prediction of sales investing that amount of money in TV, radio and newspaper is: " + str(round(prediction[0],2)) + 'k €'
 
 
@@ -108,6 +127,7 @@ def ingest_data():
     adv["TV"] = float(request.args.get("TV"))
     adv["radio"] = float(request.args.get("radio"))
     adv["newspaper"] = float(request.args.get("newspaper"))
+    adv["sales"] = float(request.args.get("sales"))
 
     comp = ingest_new_data(conn, adv)
 
@@ -122,19 +142,25 @@ def retrain():
 
     query =\
     """
-        SELECT TV, radio, newspaper FROM advertising
+        SELECT TV, radio, newspaper, sales FROM advertising
     """
     data = cursor.execute(query)
     results = data.fetchall()
 
-    print(results)
-
     columns = [descripcion[0] for descripcion in cursor.description]
-    X_test = pd.DataFrame(results, columns=columns)
 
-    prediction = model.predict(X_test)
+    data = pd.DataFrame(results, columns=columns)
+
+    X_train = data[["TV", "radio", "newspaper"]]
+    y_train = data["sales"]
+
+    model.fit(X_train, y_train)
+
+    print("aaaaaaaaaaaaa")
+    with open('data/advertising_model', 'wb') as archivo:
+        pickle.dump(model, archivo)
 
     close_db(conn)
-    return "The prediction of sales investing that amount of money in TV, radio and newspaper is: " + str(round(prediction[0],2)) + 'k €'
+    return "Model retrain"
 
 app.run()
