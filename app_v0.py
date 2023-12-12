@@ -65,23 +65,26 @@ def ingest_new_data(conn, data):
 
     cursor = conn.cursor()
 
-    tv = data["TV"]
-    radio = data["radio"]
-    newspaper = data["newspaper"]
-    sales = data["sales"]
+    try:
+        for reg in data:
+            tv = float(reg[0])
+            radio = float(reg[1])
+            newspaper = float(reg[2])
+            sales = float(reg[3])
 
-    query_2 = \
-    f"""
-        INSERT INTO advertising (TV, radio, newspaper, sales) VALUES ({tv},{radio},{newspaper},{sales})
+            query_2 = \
+            f"""
+                INSERT INTO advertising (TV, radio, newspaper, sales) VALUES ({tv},{radio},{newspaper},{sales})
 
-    """
-    cursor.execute(query_2)
+            """
+            cursor.execute(query_2)
+            conn.commit()
+        
+        results = {'message': 'Datos ingresados correctamente'}
 
-    query_comp = "SELECT * FROM advertising ORDER BY TV DESC LIMIT 1 "
-
-    data = cursor.execute(query_comp)
-    results = data.fetchall()
-
+    except Exception as e:
+        results = {"message": f'Error entering data : {str(e)}'}
+    
     return results
 
 
@@ -98,69 +101,89 @@ def welcome():
     close_db(conn)
     return "Welcome to mi API conected to predict model"
 
-@app.route('/v2/predict', methods=['GET'])
+@app.route('/predict', methods=['GET'])
 def predict():
-    model = pickle.load(open('data/advertising_model','rb'))
-    conn = connect_db()
-    cursor = conn.cursor()
+    try:
+        model = pickle.load(open('data/advertising_model','rb'))
+        conn = connect_db()
+        cursor = conn.cursor()
 
-    query =\
-    """
-        SELECT TV, radio, newspaper FROM advertising
-    """
-    data = cursor.execute(query)
-    results = data.fetchall()
+        if request.json:
+            results = {"TV": [], "radio": [], "newspaper": []}
+            data = request.json
+            input = data["data"]
+            print(input)
+            for reg in input:
+                results["TV"].append(float(reg[0]))
+                results["radio"].append(float(reg[1]))
+                results["newspaper"].append(float(reg[2]))
+                columns = results.keys()           
+        else:
+            query =\
+            """
+                SELECT TV, radio, newspaper FROM advertising
+            """
+            data = cursor.execute(query)
+            results = data.fetchall()
+            columns = [descripcion[0] for descripcion in cursor.description]
 
-    columns = [descripcion[0] for descripcion in cursor.description]
-    X_test = pd.DataFrame(results, columns=columns)
+        print(results,columns)
+        X_test = pd.DataFrame(results, columns=columns)
 
-    prediction = model.predict(X_test)
+        prediction = model.predict(X_test)
+
+
+        msg = {'prediction': f'The prediction of sales investing that amount of money in TV, radio and newspaper is: {str(round(prediction[0],2))} k €'}
+
+    except Exception as e:
+        msg = {"message": f'Error in predict data: {str(e)}'}
 
     close_db(conn)
-    return "The prediction of sales investing that amount of money in TV, radio and newspaper is: " + str(round(prediction[0],2)) + 'k €'
+    return msg
 
-
-@app.route('/v2/ingest_data', methods=["POST"])
+@app.route('/ingest', methods=["POST"])
 def ingest_data():
     conn = connect_db()
-    adv = {}
-    adv["TV"] = float(request.args.get("TV"))
-    adv["radio"] = float(request.args.get("radio"))
-    adv["newspaper"] = float(request.args.get("newspaper"))
-    adv["sales"] = float(request.args.get("sales"))
+    data = request.json
+    input = data["data"]
 
-    comp = ingest_new_data(conn, adv)
+    comp = ingest_new_data(conn, input)
 
     close_db(conn)
     return comp
 
-@app.route('/v2/retrain', methods=['GET'])
+@app.route('/retrain', methods=['POST'])
 def retrain():
-    model = pickle.load(open('data/advertising_model','rb'))
-    conn = connect_db()
-    cursor = conn.cursor()
+    try:
+        model = pickle.load(open('data/advertising_model','rb'))
+        conn = connect_db()
+        cursor = conn.cursor()
 
-    query =\
-    """
-        SELECT TV, radio, newspaper, sales FROM advertising
-    """
-    data = cursor.execute(query)
-    results = data.fetchall()
+        query =\
+        """
+            SELECT TV, radio, newspaper, sales FROM advertising
+        """
+        data = cursor.execute(query)
+        results = data.fetchall()
 
-    columns = [descripcion[0] for descripcion in cursor.description]
+        columns = [descripcion[0] for descripcion in cursor.description]
 
-    data = pd.DataFrame(results, columns=columns)
+        data = pd.DataFrame(results, columns=columns)
 
-    X_train = data[["TV", "radio", "newspaper"]]
-    y_train = data["sales"]
+        X_train = data[["TV", "radio", "newspaper"]]
+        y_train = data["sales"]
 
-    model.fit(X_train, y_train)
+        model.fit(X_train, y_train)
 
-    print("aaaaaaaaaaaaa")
-    with open('data/advertising_model', 'wb') as archivo:
-        pickle.dump(model, archivo)
+        with open('data/advertising_model', 'wb') as archivo:
+            pickle.dump(model, archivo)
 
+        msg = {'message': 'Modelo reentrenado correctamente.'}
+        
+    except Exception as e:
+        msg = {"message": f'Error in retrain model: {str(e)}'}
+    
     close_db(conn)
-    return "Model retrain"
+    return msg
 
 app.run()
