@@ -1,5 +1,5 @@
 import json
-from flask import Flask, request, jsonify
+from flask import Flask, request
 import sqlite3
 import pickle
 import pandas as pd
@@ -91,7 +91,6 @@ def ingest_new_data(conn, data):
 os.chdir(os.path.dirname(__file__))
 
 app = Flask(__name__)
-app.config["DEBUG"] = True
 
 @app.route('/', methods=['GET'])
 def welcome():
@@ -186,4 +185,5 @@ def retrain():
     close_db(conn)
     return msg
 
-app.run()
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=8000, debug=True)
