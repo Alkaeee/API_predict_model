@@ -23,7 +23,6 @@ def connect_db():
     return conn
 
 def close_db(conn):
-    conn.commit()
     conn.close()
 
 def create_db(conn):
@@ -102,10 +101,10 @@ def welcome():
 
 @app.route('/predict', methods=['GET'])
 def predict():
+    model = pickle.load(open('data/advertising_model','rb'))
+    conn = connect_db()
+    cursor = conn.cursor()
     try:
-        model = pickle.load(open('data/advertising_model','rb'))
-        conn = connect_db()
-        cursor = conn.cursor()
 
         if request.json:
             results = {"TV": [], "radio": [], "newspaper": []}
@@ -153,10 +152,10 @@ def ingest_data():
 
 @app.route('/retrain', methods=['POST'])
 def retrain():
+    conn = connect_db()
+    cursor = conn.cursor()
     try:
         model = pickle.load(open('data/advertising_model','rb'))
-        conn = connect_db()
-        cursor = conn.cursor()
 
         query =\
         """
@@ -186,4 +185,4 @@ def retrain():
     return msg
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=8000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)

@@ -1,16 +1,12 @@
-FROM python:3.11.5-alpine AS builder
+FROM python:3.11.5
 
-WORKDIR /src
-COPY . /src
-RUN apk add --no-cache build-base python3-dev libffi-dev \
-    && pip install --upgrade pip \
-    && pip install --upgrade pip setuptools \
-    && pip install --no-cache-dir -r requirements.txt
+WORKDIR /app
+COPY . /app
 
-COPY . .
+RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["python3", "app_v0.py"]
+CMD ["python", "app_v0.py"]
 
-FROM builder as dev-envs
+ENV FLASK_APP=app
 
 EXPOSE 5000
